@@ -50,7 +50,7 @@ jobs:
           from pathlib import Path
           p=Path("upstream/scripts/build-core-xcframework.sh")
           lines=p.read_text().splitlines()
-          p.write_text("\\n".join(line for line in lines if not line.strip().startswith('source "$HOME/.cargo/env"'))+"\\n")
+          p.write_text("\n".join(line for line in lines if not line.strip().startswith('source "$HOME/.cargo/env"'))+"\n")
           PY
           bash -x upstream/scripts/build-core-xcframework.sh
       - name: Generate Xcode project
