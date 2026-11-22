@@ -1,0 +1,47 @@
+name: StremioCast iOS IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["Cast/**","scripts/**",".github/workflows/ios-unsigned-ipa.yml"]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout StremioX upstream
+        uses: actions/checkout@v4
+        with:
+          repository: TV46/stremiox
+          ref: main
+          path: upstream
+      - name: Apply Cast patch
+        run: |
+          cp -R Cast upstream/app/
+          cp scripts/apply-cast-overlay.sh upstream/
+          bash upstream/apply-cast-overlay.sh upstream/app
+      - run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: upstream/app
+        run: xcodegen generate
+      - name: Resolve packages
+        working-directory: upstream/app
+        run: xcodebuild -resolvePackageDependencies -project StremioX.xcodeproj -scheme StremioXiOSNative
+      - name: Build unsigned app
+        working-directory: upstream/app
+        run: xcodebuild -project StremioX.xcodeproj -scheme StremioXiOSNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package IPA
+        run: |
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/StremioX.app"
+          test -d "$APP"
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qr StremioCast-iOS-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StremioCast-unsigned-IPA
+          path: StremioCast-iOS-unsigned.ipa
+          retention-days: 14
