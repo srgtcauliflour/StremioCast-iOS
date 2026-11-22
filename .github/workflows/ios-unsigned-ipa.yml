@@ -9,7 +9,7 @@ permissions:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - name: Checkout StremioX upstream
@@ -23,7 +23,17 @@ jobs:
           cp -R Cast upstream/app/
           cp scripts/apply-cast-overlay.sh upstream/
           bash upstream/apply-cast-overlay.sh upstream/app
-      - run: brew install xcodegen
+      - name: Install XcodeGen and Rust
+        run: |
+          brew install xcodegen
+          rustup toolchain install nightly --component rust-src
+          rustup default stable
+      - name: Fetch upstream runtime resources
+        run: |
+          bash upstream/scripts/fetch-server-deps.sh
+          bash upstream/app/scripts/fetch-node-macos.sh
+      - name: Build StremioX core XCFramework
+        run: bash upstream/scripts/build-core-xcframework.sh
       - name: Generate Xcode project
         working-directory: upstream/app
         run: xcodegen generate
@@ -32,7 +42,8 @@ jobs:
         run: xcodebuild -resolvePackageDependencies -project StremioX.xcodeproj -scheme StremioXiOSNative
       - name: Build unsigned app
         working-directory: upstream/app
-        run: xcodebuild -project StremioX.xcodeproj -scheme StremioXiOSNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+        run: |
+          xcodebuild -project StremioX.xcodeproj -scheme StremioXiOSNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
       - name: Package IPA
         run: |
           APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/StremioX.app"
