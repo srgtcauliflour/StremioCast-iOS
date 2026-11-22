@@ -32,8 +32,22 @@ jobs:
         run: |
           bash upstream/scripts/fetch-server-deps.sh
           bash upstream/app/scripts/fetch-node-macos.sh
+      - name: Diagnose Rust and Apple SDKs
+        run: |
+          echo "Working directory: $(pwd)"
+          echo "Core directory:"
+          ls -ld upstream/core upstream/scripts || true
+          echo "Rust tools:"
+          command -v rustup || true
+          command -v cargo || true
+          rustup show || true
+          echo "Apple SDK availability:"
+          for sdk in appletvos appletvsimulator iphoneos iphonesimulator; do
+            echo "--- $sdk ---"
+            xcrun --sdk "$sdk" --show-sdk-path || true
+          done
       - name: Build StremioX core XCFramework
-        run: bash upstream/scripts/build-core-xcframework.sh
+        run: bash -x upstream/scripts/build-core-xcframework.sh
       - name: Generate Xcode project
         working-directory: upstream/app
         run: xcodegen generate
