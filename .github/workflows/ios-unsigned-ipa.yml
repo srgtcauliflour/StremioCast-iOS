@@ -23,31 +23,36 @@ jobs:
           cp -R Cast upstream/app/
           cp scripts/apply-cast-overlay.sh upstream/
           bash upstream/apply-cast-overlay.sh upstream/app
-      - name: Install XcodeGen and Rust
+      - name: Select Xcode and install build toolchains
         run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          echo "Selecting $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          xcrun --sdk appletvos --show-sdk-version
           brew install xcodegen
-          rustup toolchain install nightly --component rust-src
-          rustup default stable
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup +nightly target add aarch64-apple-ios aarch64-apple-ios-sim
       - name: Fetch upstream runtime resources
         run: |
           bash upstream/scripts/fetch-server-deps.sh
           bash upstream/app/scripts/fetch-node-macos.sh
-      - name: Diagnose Rust and Apple SDKs
+      - name: Verify build toolchains
         run: |
-          echo "Working directory: $(pwd)"
-          echo "Core directory:"
-          ls -ld upstream/core upstream/scripts || true
-          echo "Rust tools:"
-          command -v rustup || true
-          command -v cargo || true
-          rustup show || true
-          echo "Apple SDK availability:"
-          for sdk in appletvos appletvsimulator iphoneos iphonesimulator; do
-            echo "--- $sdk ---"
-            xcrun --sdk "$sdk" --show-sdk-path || true
-          done
+          rustup show
+          xcrun --sdk appletvos --show-sdk-path
+          xcrun --sdk iphoneos --show-sdk-path
       - name: Build StremioX core XCFramework
-        run: bash -x upstream/scripts/build-core-xcframework.sh
+        run: |
+          # Rustup installs rustup/cargo on PATH already; upstream's optional shell
+          # source may terminate the runner shell unexpectedly, so omit it in CI.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("upstream/scripts/build-core-xcframework.sh")
+          lines=p.read_text().splitlines()
+          p.write_text("\\n".join(line for line in lines if not line.strip().startswith('source "$HOME/.cargo/env"'))+"\\n")
+          PY
+          bash -x upstream/scripts/build-core-xcframework.sh
       - name: Generate Xcode project
         working-directory: upstream/app
         run: xcodegen generate
