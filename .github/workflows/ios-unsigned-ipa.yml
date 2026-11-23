@@ -42,6 +42,8 @@ jobs:
           rustup show
           xcrun --sdk appletvos --show-sdk-path
           xcrun --sdk iphoneos --show-sdk-path
+      - name: Patch upstream core Env compatibility
+        run: python3 scripts/patch-core-client-info.py
       - name: Build StremioX core XCFramework
         run: |
           # Rustup installs rustup/cargo on PATH already; upstream's optional shell
