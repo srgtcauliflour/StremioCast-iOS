@@ -19,8 +19,8 @@ if 'GoogleCastDynamic' not in chunk:
 if '      - Cast\n' not in chunk:
     import re
     chunk, count = re.subn(
-        r'(^\\s*-\\s*SourcesiOS\\b[^\\n]*\\n)',
-        r'\\1      - Cast\\n',
+        r'(^\s*-\s*SourcesiOS\b[^\n]*\n)',
+        r'\1      - Cast\n',
         chunk,
         count=1,
         flags=re.MULTILINE,
