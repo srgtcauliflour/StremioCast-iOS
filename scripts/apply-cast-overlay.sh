@@ -16,10 +16,10 @@ if 'GoogleCastDynamic' not in chunk:
     chunk=chunk.replace('    dependencies:\n','    dependencies:\n      - package: GoogleCast\n        product: GoogleCastDynamic\n',1)
 # Register the entire Cast directory under the native target's sources.
 # This avoids relying on an exact match for the commented SourcesiOS entry.
-if '    sources:\\n' not in chunk:
+if '    sources:\n' not in chunk:
     raise SystemExit('Native iOS target has no sources section')
-if '      - Cast\\n' not in chunk:
-    chunk=chunk.replace('    sources:\\n','    sources:\\n      - Cast\\n',1)
+if '      - Cast\n' not in chunk:
+    chunk=chunk.replace('    sources:\n','    sources:\n      - Cast\n',1)
 s=s[:start]+chunk+s[end:]; project.write_text(s)
 info=root/'Resources/Info-iOS.plist'
 pl=plistlib.loads(info.read_bytes())
