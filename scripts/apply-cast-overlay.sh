@@ -14,19 +14,12 @@ start=s.index(key); end=s.find('\n  StremioX',start+len(key)); end=len(s) if end
 chunk=s[start:end]
 if 'GoogleCastDynamic' not in chunk:
     chunk=chunk.replace('    dependencies:\n','    dependencies:\n      - package: GoogleCast\n        product: GoogleCastDynamic\n',1)
-# XcodeGen source entries may include trailing comments, so match the
-# SourcesiOS entry as a complete YAML line rather than an exact string.
-if '      - Cast\n' not in chunk:
-    import re
-    chunk, count = re.subn(
-        r'(^\s*-\s*SourcesiOS\b[^\n]*\n)',
-        r'\1      - Cast\n',
-        chunk,
-        count=1,
-        flags=re.MULTILINE,
-    )
-    if count != 1:
-        raise SystemExit('Could not register Cast source directory in native iOS target')
+# Register the entire Cast directory under the native target's sources.
+# This avoids relying on an exact match for the commented SourcesiOS entry.
+if '    sources:\\n' not in chunk:
+    raise SystemExit('Native iOS target has no sources section')
+if '      - Cast\\n' not in chunk:
+    chunk=chunk.replace('    sources:\\n','    sources:\\n      - Cast\\n',1)
 s=s[:start]+chunk+s[end:]; project.write_text(s)
 info=root/'Resources/Info-iOS.plist'
 pl=plistlib.loads(info.read_bytes())
