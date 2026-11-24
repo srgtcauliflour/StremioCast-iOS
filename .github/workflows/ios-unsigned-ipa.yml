@@ -67,7 +67,7 @@ jobs:
           xcodebuild -project StremioX.xcodeproj -scheme StremioXiOSNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
       - name: Package IPA
         run: |
-          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/StremioX.app"
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/StremioXiOSNative.app"
           test -d "$APP"
           mkdir Payload
           cp -R "$APP" Payload/
