@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["Cast/**","scripts/**",".github/workflows/ios-unsigned-ipa.yml"]
+    paths: ["Cast/**","scripts/**",".github/workflows/ios-unsigned-ipa.yml","README.md"]
 permissions:
   contents: read
 jobs:
@@ -12,12 +12,34 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout StremioX upstream
+      - name: Checkout native StremioX source
         uses: actions/checkout@v4
         with:
           repository: TV46/stremiox
           ref: main
           path: upstream
+      - name: Resolve latest official Stremio core
+        working-directory: upstream
+        run: |
+          CORE_SHA="$(git ls-remote https://github.com/Stremio/stremio-core.git refs/heads/development | awk '{print $1}')"
+          test -n "$CORE_SHA"
+          echo "Official Stremio core development revision: $CORE_SHA"
+          python3 - "$CORE_SHA" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path("core/Cargo.toml")
+          s=p.read_text()
+          old='git = "https://github.com/Stremio/stremio-core", branch = "development"'
+          new='git = "https://github.com/Stremio/stremio-core", rev = "'+sys.argv[1]+'"'
+          if old not in s:
+              if new not in s:
+                  raise SystemExit("Could not find the expected official stremio-core dependency")
+          else:
+              s=s.replace(old,new,1)
+              p.write_text(s)
+          print("Pinned native build to official stremio-core revision "+sys.argv[1])
+          PY
+          echo "STREMIO_CORE_SHA=$CORE_SHA" >> "$GITHUB_ENV"
       - name: Apply Cast patch
         run: |
           cp -R Cast upstream/app/
@@ -29,7 +51,6 @@ jobs:
           echo "Selecting $XCODE"
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
-          xcrun --sdk appletvos --show-sdk-version
           brew install xcodegen
           rustup toolchain install nightly --profile minimal --component rust-src
           rustup +nightly target add aarch64-apple-ios aarch64-apple-ios-sim
@@ -40,14 +61,13 @@ jobs:
       - name: Verify build toolchains
         run: |
           rustup show
-          xcrun --sdk appletvos --show-sdk-path
           xcrun --sdk iphoneos --show-sdk-path
+          xcrun --sdk iphonesimulator --show-sdk-path
+          echo "Building against official stremio-core $STREMIO_CORE_SHA"
       - name: Patch upstream core Env compatibility
         run: python3 scripts/patch-core-client-info.py
       - name: Build StremioX core XCFramework
         run: |
-          # Rustup installs rustup/cargo on PATH already; upstream's optional shell
-          # source may terminate the runner shell unexpectedly, so omit it in CI.
           python3 - <<'PY'
           from pathlib import Path
           p=Path("upstream/scripts/build-core-xcframework.sh")
