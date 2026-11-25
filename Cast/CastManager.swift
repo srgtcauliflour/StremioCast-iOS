@@ -5,8 +5,7 @@ import GoogleCast
 final class CastManager: NSObject, ObservableObject,
                          @preconcurrency GCKSessionManagerListener,
                          @preconcurrency GCKRequestDelegate,
-                         @preconcurrency GCKRemoteMediaClientListener,
-                         @preconcurrency GCKLoggerDelegate {
+                         @preconcurrency GCKRemoteMediaClientListener {
     static let shared = CastManager()
 
     @Published private(set) var connected = false
@@ -15,6 +14,7 @@ final class CastManager: NSObject, ObservableObject,
 
     private var pending: (URL, String)?
     private var activeLoadRequest: GCKRequest?
+    private var activeURL: URL?
     private weak var observedMediaClient: GCKRemoteMediaClient?
     private var initialized = false
     private var didPauseLocalForCurrentCast = false
@@ -30,10 +30,6 @@ final class CastManager: NSObject, ObservableObject,
         context.sessionManager.add(self)
         context.useDefaultExpandedMediaControls = true
 
-        GCKLogger.sharedInstance().delegate = self
-        let filter = GCKLoggerFilter()
-        filter.minimumLevel = .info
-        GCKLogger.sharedInstance().filter = filter
     }
 
     /// Keep the selected stream ready before GCKUICastButton opens its picker.
@@ -93,6 +89,7 @@ final class CastManager: NSObject, ObservableObject,
 
         // loadMedia is asynchronous. Retain its request and delegate to observe receiver rejection.
         let request = client.loadMedia(builder.build())
+        activeURL = url
         activeLoadRequest = request
         request.delegate = self
         observedMediaClient?.remove(self)
@@ -102,7 +99,8 @@ final class CastManager: NSObject, ObservableObject,
         statusMessage = "Sending media to Chromecast…"
         pending = nil
         GCKCastContext.sharedInstance().presentDefaultExpandedMediaControls()
-        print("[StremioCast] LOAD url=\(url.absoluteString) mime=\(contentType) title=\(item.1)")
+        // Never log a full stream URL: query strings can contain debrid/API capability tokens.
+        print("[StremioCast] LOAD requested format=\(url.pathExtension.lowercased()) mime=\(contentType)")
     }
 
     private func fail(_ message: String) {
@@ -137,12 +135,6 @@ final class CastManager: NSObject, ObservableObject,
     }
 
 
-    // MARK: GCKLoggerDelegate
-
-    func logMessage(_ message: String, at level: GCKLoggerLevel, fromFunction function: String, location: String) {
-        print("[GoogleCast] \(function) — \(message) (\(location))")
-    }
-
     // MARK: GCKSessionManagerListener
 
     func sessionManager(_ manager: GCKSessionManager, didStart session: GCKCastSession) {
@@ -154,7 +146,7 @@ final class CastManager: NSObject, ObservableObject,
     func sessionManager(_ manager: GCKSessionManager, didResume session: GCKCastSession, withError error: Error?) {
         connected = error == nil
         if let error {
-            fail("The Chromecast session could not resume: \(error.localizedDescription)")
+            fail("The Chromecast session could not resume. Disconnect and try again.")
         } else {
             statusMessage = "Reconnected to \(session.device.friendlyName ?? "Chromecast")"
             send(session)
@@ -168,12 +160,12 @@ final class CastManager: NSObject, ObservableObject,
         observedMediaClient?.remove(self)
         observedMediaClient = nil
         statusMessage = "Disconnected"
-        if let error { print("[StremioCast] Session ended: \(error.localizedDescription)") }
+        activeURL = nil
     }
 
     func sessionManager(_ manager: GCKSessionManager, didFailToStart session: GCKCastSession, withError error: Error) {
         connected = false
-        fail("Could not start the Chromecast session: \(error.localizedDescription)")
+        fail("Could not start the Chromecast session. Check that the device is available on the same Wi-Fi network.")
     }
 
     func sessionManager(_ manager: GCKSessionManager, didSuspend session: GCKCastSession, with reason: GCKConnectionSuspendReason) {
@@ -193,7 +185,8 @@ final class CastManager: NSObject, ObservableObject,
     func request(_ request: GCKRequest, didFailWithError error: GCKError) {
         guard request.requestID == activeLoadRequest?.requestID else { return }
         activeLoadRequest = nil
-        fail("Chromecast rejected the media load request: \(error.localizedDescription)")
+        activeURL = nil
+        fail("Chromecast rejected the media load request. The receiver may not be able to reach this URL or support its format.")
     }
 
     // MARK: GCKRemoteMediaClientListener
@@ -203,6 +196,10 @@ final class CastManager: NSObject, ObservableObject,
             statusMessage = "Waiting for Chromecast media status"
             return
         }
+        // A resumed/previous Cast session may report unrelated media. Only transfer playback
+        // ownership when the receiver confirms the exact URL this player just submitted.
+        guard let expectedURL = activeURL,
+              mediaStatus.mediaInformation?.contentURL == expectedURL else { return }
 
         switch mediaStatus.playerState {
         case .playing:
