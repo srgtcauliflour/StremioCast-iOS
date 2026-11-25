@@ -5,7 +5,8 @@ import GoogleCast
 final class CastManager: NSObject, ObservableObject,
                          @preconcurrency GCKSessionManagerListener,
                          @preconcurrency GCKRequestDelegate,
-                         @preconcurrency GCKRemoteMediaClientListener {
+                         @preconcurrency GCKRemoteMediaClientListener,
+                         @preconcurrency GCKLoggerDelegate {
     static let shared = CastManager()
 
     @Published private(set) var connected = false
@@ -133,6 +134,13 @@ final class CastManager: NSObject, ObservableObject,
 
         // Best-effort fallback for extensionless progressive-video CDN URLs.
         return "video/mp4"
+    }
+
+
+    // MARK: GCKLoggerDelegate
+
+    func logMessage(_ message: String, at level: GCKLoggerLevel, fromFunction function: String, location: String) {
+        print("[GoogleCast] \(function) — \(message) (\(location))")
     }
 
     // MARK: GCKSessionManagerListener
