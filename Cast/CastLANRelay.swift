@@ -211,9 +211,9 @@ final class CastLANRelay: @unchecked Sendable {
                 if let delimiter = self.requestBytes.range(of: Data("\r\n\r\n".utf8)) {
                     guard delimiter.upperBound == self.requestBytes.endIndex,
                           let text = String(data: self.requestBytes, encoding: .utf8),
-                          let request = self.parse(text), self.valid() else { self.reject(); return }
+                          let range = self.parse(text), self.valid() else { self.reject(); return }
                     self.headerDeadline?.cancel(); self.headerDeadline = nil
-                    self.open(request.range)
+                    self.open(range)
                 } else if done || error != nil { self.cancel() } else { self.receive() }
             }
         }
