@@ -166,6 +166,7 @@ final class CastLANRelay: @unchecked Sendable {
     }
 
     private final class Client: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+        private struct ParsedRequest { let range: String? }
         let connection: NWConnection
         let queue: DispatchQueue
         let token: String
@@ -211,14 +212,14 @@ final class CastLANRelay: @unchecked Sendable {
                 if let delimiter = self.requestBytes.range(of: Data("\r\n\r\n".utf8)) {
                     guard delimiter.upperBound == self.requestBytes.endIndex,
                           let text = String(data: self.requestBytes, encoding: .utf8),
-                          let range = self.parse(text), self.valid() else { self.reject(); return }
+                          let request = self.parse(text), self.valid() else { self.reject(); return }
                     self.headerDeadline?.cancel(); self.headerDeadline = nil
-                    self.open(range)
+                    self.open(request.range)
                 } else if done || error != nil { self.cancel() } else { self.receive() }
             }
         }
 
-        private func parse(_ raw: String) -> String? {
+        private func parse(_ raw: String) -> ParsedRequest? {
             let lines = raw.components(separatedBy: "\r\n")
             guard let first = lines.first else { return nil }
             let parts = first.split(separator: " ")
@@ -238,7 +239,7 @@ final class CastLANRelay: @unchecked Sendable {
                     range = value
                 }
             }
-            return range
+            return ParsedRequest(range: range)
         }
 
         func open(_ range: String?) {
