@@ -47,7 +47,7 @@ if 'CastButton(url: curURL ?? url, title: title, headers: curHeaders ?? headers 
     i=p.find(anchor)
     if i<0: raise SystemExit('Player toolbar insertion anchor not found')
     end=p.find('\n',i)
-    p=p[:end+1]+'            #if os(iOS)\n            CastButton(url: curURL ?? url, title: title).frame(width: 38, height: 38)\n            #endif\n'+p[end+1:]
+    p=p[:end+1]+'            #if os(iOS)\n            CastButton(url: curURL ?? url, title: title, headers: curHeaders ?? headers ?? [:]).frame(width: 38, height: 38)\n            #endif\n'+p[end+1:]
 
 if '@ObservedObject private var castManager = CastManager.shared' not in p:
     anchor='    @EnvironmentObject private var theme: ThemeManager'

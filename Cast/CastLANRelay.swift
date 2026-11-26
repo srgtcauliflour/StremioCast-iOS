@@ -292,9 +292,9 @@ final class CastLANRelay: @unchecked Sendable {
         func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                         completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
             guard valid(), !closed, !rejecting, let http = response as? HTTPURLResponse,
-                  http.url == source, [200, 206, 301, 302, 303, 307, 308, 400, 401, 403, 404, 416, 500, 502, 503].contains(http.statusCode),
-                  let length = http.value(forHTTPHeaderField: "Content-Length") ?? ([204, 304, 416].contains(http.statusCode) ? "0" : nil),
-                  UInt64(length) != nil else {
+                  http.url == source,
+                  (200...299).contains(http.statusCode) || [301, 302, 303, 307, 308, 400, 401, 403, 404, 416, 500, 502, 503].contains(http.statusCode),
+                  http.value(forHTTPHeaderField: "Content-Length").map({ UInt64($0) != nil }) ?? true else {
                 reject(); completionHandler(.cancel); return
             }
             // Redirects are denied above; surface the status instead of following to an unpinned host.

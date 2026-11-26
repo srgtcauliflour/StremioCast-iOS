@@ -14,7 +14,7 @@ struct CastButton: UIViewRepresentable {
     func makeUIView(context: Context) -> GCKUICastButton {
         let button = GCKUICastButton(frame: CGRect(x: 0, y: 0, width: 38, height: 38))
         button.tintColor = .white
-        button.addTarget(context.coordinator, action: #selector(Coordinator.queueMedia), for: .touchUpInside)
+        button.addTarget(context.coordinator, action: #selector(Coordinator.queueMedia), for: .touchDown)
         button.accessibilityLabel = "Cast to Chromecast"
         CastManager.shared.prepare(url, title: title, headers: headers ?? [:])
         return button

@@ -11,7 +11,7 @@ Chromecast sender integration for the native iOS StremioX client.
 - GCKRequestDelegate tracks media-load acceptance and failures.
 - GCKRemoteMediaClientListener tracks receiver playback state.
 - The local player pauses only after the receiver reports that playback has started.
-- Localhost/loopback stream URLs are rejected with a user-visible explanation.
+- iPhone-local HTTP streams can be exposed through a short-lived, token-protected Wi-Fi relay pinned to one URL; GET, HEAD and byte-range requests are forwarded, along with the stream's player headers.
 - MIME type inference covers common progressive video, HLS, DASH and audio extensions.
 - Bonjour/local-network permission entries are included.
 
@@ -31,8 +31,8 @@ safe source update.
 
 - No transcoding.
 - The Chromecast receiver must be able to reach the media URL directly.
-- iPhone localhost/loopback streams cannot be fetched by the Chromecast.
-- Torrent streams and URLs requiring headers available only to the iPhone player may fail.
+- The local relay is limited to one selected HTTP source, uses the iPhone Wi-Fi interface, and is revoked when the Cast session ends (or after its expiry).
+- Torrent streams, DRM, local sources that require unsupported schemes, and URLs requiring player-only behavior may still fail. The relay does not transcode or turn the iPhone into a general-purpose proxy.
 - Some media hosts block Chromecast user agents or cross-device requests.
 - Real-device playback must still be verified on the user's Chromecast.
 
