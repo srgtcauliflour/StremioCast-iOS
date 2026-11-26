@@ -218,7 +218,7 @@ final class CastLANRelay: @unchecked Sendable {
             }
         }
 
-        private func parse(_ raw: String) -> (range: String?)? {
+        private func parse(_ raw: String) -> String? {
             let lines = raw.components(separatedBy: "\r\n")
             guard let first = lines.first else { return nil }
             let parts = first.split(separator: " ")
@@ -238,7 +238,7 @@ final class CastLANRelay: @unchecked Sendable {
                     range = value
                 }
             }
-            return (range)
+            return range
         }
 
         func open(_ range: String?) {
