@@ -30,7 +30,7 @@ project.write_text(s)
 
 info=root/'Resources/Info-iOS.plist'
 pl=plistlib.loads(info.read_bytes())
-pl['NSLocalNetworkUsageDescription']='Stremio uses the local network to discover Chromecast devices.'
+pl['NSLocalNetworkUsageDescription']='Stremio uses your local network to discover Chromecast devices and share selected streams with them.'
 pl['NSBonjourServices']=sorted(set(pl.get('NSBonjourServices',[]))|{'_googlecast._tcp','_CC1AD845._googlecast._tcp'})
 info.write_bytes(plistlib.dumps(pl,fmt=plistlib.FMT_XML))
 
