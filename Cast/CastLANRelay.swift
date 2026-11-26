@@ -19,9 +19,8 @@ final class CastLANRelay: @unchecked Sendable {
     private var host = ""
 
     init(source: URL, headers: [String: String]) throws {
-        guard Self.isLoopback(source), source.scheme?.lowercased() == "http" else {
-            throw RelayError.unsupportedSource
-        }
+        guard ["http", "https"].contains(source.scheme?.lowercased() ?? ""),
+              source.host != nil else { throw RelayError.unsupportedSource }
         self.source = source
         self.headers = Self.safeHeaders(headers)
         var generator = SystemRandomNumberGenerator()
@@ -183,6 +182,7 @@ final class CastLANRelay: @unchecked Sendable {
         var closed = false
         var pendingSends = 0
         var upstreamFinished = false
+        var redirectCount = 0
         var headerDeadline: DispatchWorkItem?
 
         init(connection: NWConnection, queue: DispatchQueue, token: String, source: URL,
@@ -285,15 +285,24 @@ final class CastLANRelay: @unchecked Sendable {
 
         func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                         newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
-            // Do not let a local service turn this one-source bridge into an arbitrary network proxy.
-            completionHandler(nil)
+            guard redirectCount < 6,
+                  let target = request.url,
+                  ["http", "https"].contains(target.scheme?.lowercased() ?? ""),
+                  target.host != nil else { completionHandler(nil); return }
+            redirectCount += 1
+            var safeRequest = request
+            if response.url?.host?.lowercased() != target.host?.lowercased() {
+                safeRequest.setValue(nil, forHTTPHeaderField: "Authorization")
+                safeRequest.setValue(nil, forHTTPHeaderField: "Cookie")
+            }
+            completionHandler(safeRequest)
         }
 
         func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                         completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
             guard valid(), !closed, !rejecting, let http = response as? HTTPURLResponse,
-                  http.url == source,
-                  (200...299).contains(http.statusCode) || [301, 302, 303, 307, 308, 400, 401, 403, 404, 416, 500, 502, 503].contains(http.statusCode),
+                  ["http", "https"].contains(http.url?.scheme?.lowercased() ?? ""),
+                  (200...299).contains(http.statusCode) || [400, 401, 403, 404, 416, 500, 502, 503].contains(http.statusCode),
                   http.value(forHTTPHeaderField: "Content-Length").map({ UInt64($0) != nil }) ?? true else {
                 reject(); completionHandler(.cancel); return
             }

@@ -50,14 +50,14 @@ final class CastManager: NSObject, ObservableObject,
         lastError = nil
         didPauseLocalForCurrentCast = false
         statusMessage = "Waiting for Chromecast connection"
-        if CastLANRelay.isLoopback(url) { startRelayIfNeeded() }
+        startRelayIfNeeded()
         if let session = GCKCastContext.sharedInstance().sessionManager.currentCastSession {
             send(session)
         }
     }
 
     private func startRelayIfNeeded() {
-        guard relayTask == nil, let item = pending, CastLANRelay.isLoopback(item.url) else { return }
+        guard relayTask == nil, relay == nil, let item = pending else { return }
         do {
             let bridge = try CastLANRelay(source: item.url, headers: item.headers)
             relay = bridge
@@ -98,16 +98,10 @@ final class CastManager: NSObject, ObservableObject,
         }
 
         let sourceURL = item.url
-        let url: URL
-        if CastLANRelay.isLoopback(sourceURL) {
-            guard let bridgeURL = preparedRelayURL else {
-                startRelayIfNeeded()
-                statusMessage = "Preparing a private Wi-Fi stream bridge…"
-                return
-            }
-            url = bridgeURL
-        } else {
-            url = sourceURL
+        guard let url = preparedRelayURL else {
+            startRelayIfNeeded()
+            statusMessage = "Preparing a private Wi-Fi stream bridge…"
+            return
         }
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               let host = url.host?.lowercased(), !host.isEmpty else {
