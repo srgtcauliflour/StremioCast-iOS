@@ -42,7 +42,7 @@ app.write_text(a)
 
 player=root/'Sources/PlayerScreen.swift'
 p=player.read_text()
-if 'CastButton(url: curURL ?? url, title: title)' not in p:
+if 'CastButton(url: curURL ?? url, title: title, headers: curHeaders ?? headers ?? [:])' not in p:
     anchor='            iconButton("gearshape", label: "Player settings")'
     i=p.find(anchor)
     if i<0: raise SystemExit('Player toolbar insertion anchor not found')

@@ -12,7 +12,10 @@ final class CastManager: NSObject, ObservableObject,
     @Published private(set) var lastError: String?
     @Published private(set) var statusMessage = "Not connected"
 
-    private var pending: (URL, String)?
+    private var pending: (url: URL, title: String, headers: [String: String])?
+    private var relay: CastLANRelay?
+    private var relayTask: Task<Void, Never>?
+    private var preparedRelayURL: URL?
     private var activeLoadRequest: GCKRequest?
     private var activeURL: URL?
     private weak var observedMediaClient: GCKRemoteMediaClient?
@@ -34,17 +37,53 @@ final class CastManager: NSObject, ObservableObject,
 
     /// Keep the selected stream ready before GCKUICastButton opens its picker.
     /// This avoids relying on UIControl target ordering relative to the SDK's own Cast action.
-    func prepare(_ url: URL, title: String) {
-        pending = (url, title)
+    func prepare(_ url: URL, title: String, headers: [String: String] = [:]) {
+        pending = (url: url, title: title, headers: headers)
     }
 
-    func queue(_ url: URL, title: String) {
-        pending = (url, title)
+    func queue(_ url: URL, title: String, headers: [String: String] = [:]) {
+        relayTask?.cancel()
+        relay?.stop()
+        relay = nil
+        preparedRelayURL = nil
+        pending = (url: url, title: title, headers: headers)
         lastError = nil
         didPauseLocalForCurrentCast = false
         statusMessage = "Waiting for Chromecast connection"
+        if CastLANRelay.isLoopback(url) { startRelayIfNeeded() }
         if let session = GCKCastContext.sharedInstance().sessionManager.currentCastSession {
             send(session)
+        }
+    }
+
+    private func startRelayIfNeeded() {
+        guard relayTask == nil, let item = pending, CastLANRelay.isLoopback(item.url) else { return }
+        do {
+            let bridge = try CastLANRelay(source: item.url, headers: item.headers)
+            relay = bridge
+            statusMessage = "Preparing a private Wi-Fi stream bridge…"
+            relayTask = Task { [weak self, weak bridge] in
+                guard let self, let bridge else { return }
+                do {
+                    let url = try await bridge.start()
+                    guard self.pending?.url == item.url else { bridge.stop(); return }
+                    self.preparedRelayURL = url
+                    self.relayTask = nil
+                    self.statusMessage = "Wi-Fi bridge ready — sending to Chromecast"
+                    if let session = GCKCastContext.sharedInstance().sessionManager.currentCastSession {
+                        self.send(session)
+                    }
+                } catch {
+                    guard self.pending?.url == item.url else { return }
+                    self.relayTask = nil
+                    self.relay = nil
+                    self.fail((error as? CastLANRelay.RelayError)?.errorDescription ?? "Could not prepare a Wi-Fi stream bridge.")
+                    self.pending = nil
+                }
+            }
+        } catch {
+            fail((error as? CastLANRelay.RelayError)?.errorDescription ?? "This local stream cannot be shared with Chromecast.")
+            pending = nil
         }
     }
 
@@ -58,18 +97,21 @@ final class CastManager: NSObject, ObservableObject,
             return
         }
 
-        let url = item.0
+        let sourceURL = item.url
+        let url: URL
+        if CastLANRelay.isLoopback(sourceURL) {
+            guard let bridgeURL = preparedRelayURL else {
+                startRelayIfNeeded()
+                statusMessage = "Preparing a private Wi-Fi stream bridge…"
+                return
+            }
+            url = bridgeURL
+        } else {
+            url = sourceURL
+        }
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               let host = url.host?.lowercased(), !host.isEmpty else {
             fail("This stream does not have a valid HTTP or HTTPS address. Chromecast cannot play this source directly.")
-            pending = nil
-            return
-        }
-
-        // A receiver cannot access the sender's loopback interface. Private LAN addresses remain
-        // allowed because the Chromecast may be able to reach them on the same network.
-        if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
-            fail("This stream is hosted on the iPhone itself. Chromecast cannot reach an iPhone localhost URL. A LAN-accessible relay is required for this source.")
             pending = nil
             return
         }
@@ -79,9 +121,9 @@ final class CastManager: NSObject, ObservableObject,
             return
         }
 
-        let contentType = Self.contentType(for: url)
+        let contentType = Self.contentType(for: sourceURL)
         let metadata = GCKMediaMetadata(metadataType: .movie)
-        metadata.setString(item.1, forKey: kGCKMetadataKeyTitle)
+        metadata.setString(item.title, forKey: kGCKMetadataKeyTitle)
         let builder = GCKMediaInformationBuilder(contentURL: url)
         builder.contentType = contentType
         builder.streamType = .buffered
@@ -161,6 +203,9 @@ final class CastManager: NSObject, ObservableObject,
         observedMediaClient = nil
         statusMessage = "Disconnected"
         activeURL = nil
+        relayTask?.cancel(); relayTask = nil
+        relay?.stop(); relay = nil
+        preparedRelayURL = nil
     }
 
     func sessionManager(_ manager: GCKSessionManager, didFailToStart session: GCKCastSession, withError error: Error) {
@@ -186,6 +231,9 @@ final class CastManager: NSObject, ObservableObject,
         guard request.requestID == activeLoadRequest?.requestID else { return }
         activeLoadRequest = nil
         activeURL = nil
+        relayTask?.cancel(); relayTask = nil
+        relay?.stop(); relay = nil
+        preparedRelayURL = nil
         fail("Chromecast rejected the media load request. The receiver may not be able to reach this URL or support its format.")
     }
 
